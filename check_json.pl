@@ -213,12 +213,25 @@ my @statusmsg;
 # routine to add perfdata from JSON response based on a loop of keys given in perfvals (csv)
 if ($np->opts->perfvars) {
     foreach my $key ($np->opts->perfvars eq '*' ? map { "{$_}"} sort keys %$json_response : split(',', $np->opts->perfvars)) {
+        # Break up key. Don't overwrite $key because %attributes stores data
+        # differently
+        my $clnkey = $key;
+        $clnkey =~ s/[{}]//g;
+        my @keys = split('->', $clnkey);
         # use last element of key as label
-        my $label = (split('->', $key))[-1];
+        my $label = $keys[-1];
         # make label ascii compatible
         $label =~ s/[^a-zA-Z0-9_-]//g  ;
-        my $perf_value;
-        $perf_value = $json_response->{$key};
+        my $ptr = $json_response;
+        foreach my $i (@keys) {
+          unless (defined($ptr)) {
+            last;
+          }
+          if (ref($ptr)) {
+            $ptr = $ptr->{$i};
+          }
+        }
+        my $perf_value = defined($ptr) ? scalar($ptr) : '';
         if ($np->opts->verbose) { print Dumper ("JSON key: ".$label.", JSON val: " . $perf_value) };
         if ( defined($perf_value) ) {
             # add threshold if attribute option matches key
