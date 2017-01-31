@@ -243,12 +243,24 @@ if ($np->opts->perfvars) {
 # output some vars in message
 if ($np->opts->outputvars) {
     foreach my $key ($np->opts->outputvars eq '*' ? map { "{$_}"} sort keys %$json_response : split(',', $np->opts->outputvars)) {
+        # Break up key
+        $key =~ s/[{}]//g;
+        my @keys = split('->', $key);
         # use last element of key as label
-        my $label = (split('->', $key))[-1];
+        my $label = $keys[-1];
         # make label ascii compatible
         $label =~ s/[^a-zA-Z0-9_-]//g;
-        my $output_value;
-        $output_value = $json_response->{$key};
+        # Traverse $json_response and get $output_value
+        my $ptr = $json_response;
+        foreach my $i (@keys) {
+          unless (defined($ptr)) {
+            last;
+          }
+          if (ref($ptr)) {
+            $ptr = $ptr->{$i};
+          }
+        }
+        my $output_value = defined($ptr) ? scalar($ptr) : '';
         push(@statusmsg, "$label: $output_value");
     }
 }
