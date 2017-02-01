@@ -253,28 +253,83 @@ if ($np->opts->perfvars) {
     }
 }
 
+
+# recurse_json($json_data, \&callback);
+# recurse_json($json_data, \&callback, $path);
+# Invokes &callback for every terminal node in $json_data.
+# &callback is passed the name and the value of the leaf, i.e.
+#    callback($label, $value)
+# If $path is defined, recurse_json prepends it to $label. When recursing,
+# it adds a / between components.
+sub recurse_json {
+    my $ptr = shift;
+    my $callback = shift;
+    my $path = shift;
+
+    if (ref($ptr)) {
+       foreach my $i (keys(%$ptr)) {
+          my $p = $path;
+          if (defined($p) && $p ne '') {
+             $p .= '/' . $i;
+          } else {
+             $p = $i;
+          }
+          if (ref($ptr->{$i}) eq 'HASH') {
+             recurse_json($ptr->{$i}, $callback, defined($path) ? $p : undef);
+          } else {
+             &$callback($p, $ptr->{$i});
+          }
+       }
+    }
+}
+
+# format_output($label, $value)
+# Formats output pairs for pretty-printing
+sub format_output {
+    my $label = shift;
+    my $output_value = shift;
+    if (! defined $output_value) {
+        $output_value = '';
+    #} elsif (ref($output_value) eq 'ARRAY') {
+    #    # commas will result in ambiguous output, unfortunately
+    #    $output_value = '[' . join(';', @$output_value) . ']';
+    }
+    $label =~ s/[^\/a-zA-Z0-9_-]//g;
+    return "$label: $output_value"
+}
+
 # output some vars in message
 if ($np->opts->outputvars) {
-    foreach my $key ($np->opts->outputvars eq '*' ? map { "{$_}"} sort keys %$json_response : split(',', $np->opts->outputvars)) {
-        # Break up key
-        $key =~ s/[{}]//g;
-        my @keys = split('->', $key);
-        # use last element of key as label
-        my $label = $keys[-1];
-        # make label ascii compatible
-        $label =~ s/[^a-zA-Z0-9_-]//g;
-        # Traverse $json_response and get $output_value
+    foreach my $key (split(',', $np->opts->outputvars)) {
+
+        my @keys;
         my $ptr = $json_response;
-        foreach my $i (@keys) {
-          unless (defined($ptr)) {
-            last;
-          }
-          if (ref($ptr)) {
-            $ptr = $ptr->{$i};
-          }
+
+        if ($key ne '*') {
+           # Break up key
+           $key =~ s/[{}]//g;
+           @keys = split('->', $key);
+
+           # Traverse $json_response (as $ptr) and get $output_value
+           foreach my $i (@keys) {
+              unless (defined($ptr)) {
+                last;
+              }
+              if (ref($ptr) eq 'HASH') {
+                $ptr = $ptr->{$i};
+                # XXX deal with situation where we hit end early
+              }
+           }
         }
-        my $output_value = defined($ptr) ? scalar($ptr) : '';
-        push(@statusmsg, "$label: $output_value");
+
+        if (ref($ptr) eq 'HASH') {
+           recurse_json($ptr, sub {
+              push(@statusmsg, format_output(@_));
+           }, '');
+        } else {
+           # use last element of key as label
+           push(@statusmsg, format_output($keys[-1], $ptr));
+        }
     }
 }
 
