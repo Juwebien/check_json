@@ -305,20 +305,29 @@ if ($np->opts->outputvars) {
         my @keys;
         my $ptr = $json_response;
 
+        # If not dumping everything, we need to move $ptr to the start
+        # of whatever we're dumping
         if ($key ne '*') {
            # Break up key
            $key =~ s/[{}]//g;
            @keys = split('->', $key);
 
            # Traverse $json_response (as $ptr) and get $output_value
-           foreach my $i (@keys) {
+           my $i;
+           for($i = 0; $i <= $#keys; $i++) {
               unless (defined($ptr)) {
                 last;
               }
               if (ref($ptr) eq 'HASH') {
-                $ptr = $ptr->{$i};
-                # XXX deal with situation where we hit end early
+                $ptr = $ptr->{$keys[$i]};
+              } else {
+                last;
               }
+           }
+
+           # Did we hit everything on the path? i.e. does the key exist?
+           if ($i - 1 != $#keys) {
+              $ptr = undef;
            }
         }
 
