@@ -266,18 +266,29 @@ sub recurse_json {
     my $callback = shift;
     my $path = shift;
 
-    if (ref($ptr)) {
-       foreach my $i (keys(%$ptr)) {
-          my $p = $path;
-          if (defined($p) && $p ne '') {
-             $p .= '/' . $i;
-          } else {
-             $p = $i;
-          }
-          if (ref($ptr->{$i}) eq 'HASH') {
-             recurse_json($ptr->{$i}, $callback, defined($path) ? $p : undef);
-          } else {
-             &$callback($p, $ptr->{$i});
+    my @k;
+
+    if (ref($ptr) eq 'HASH') {
+       @k = keys(%$ptr);
+    } elsif (ref($ptr) eq 'ARRAY') {
+       @k = keys(@$ptr);
+    }
+    foreach my $i (@k) {
+       my $p = $path;
+       if (defined($p) && $p ne '') {
+          $p .= '/' . $i;
+       } else {
+          $p = $i;
+       }
+       if (ref($ptr) eq 'HASH' && ref($ptr->{$i})) {
+          recurse_json($ptr->{$i}, $callback, defined($path) ? $p : undef);
+       } elsif (ref($ptr) eq 'ARRAY' && ref($ptr->[$i])) {
+          recurse_json($ptr->[$i], $callback, defined($path) ? $p : undef);
+       } else {
+          if (ref($ptr) eq 'HASH') {
+            &$callback($p, $ptr->{$i});
+          } elsif (ref($ptr) eq 'ARRAY') {
+            &$callback($p, $ptr->[$i]);
           }
        }
     }
@@ -290,9 +301,9 @@ sub format_output {
     my $output_value = shift;
     if (! defined $output_value) {
         $output_value = '';
-    #} elsif (ref($output_value) eq 'ARRAY') {
-    #    # commas will result in ambiguous output, unfortunately
-    #    $output_value = '[' . join(';', @$output_value) . ']';
+    } elsif (ref($output_value) eq 'ARRAY') {
+        # commas will result in ambiguous output, unfortunately
+        $output_value = '[' . join(';', @$output_value) . ']';
     }
     $label =~ s/[^\/a-zA-Z0-9_-]//g;
     return "$label: $output_value"
@@ -331,6 +342,7 @@ if ($np->opts->outputvars) {
            }
         }
 
+        # depending on desired behavior, this could just be ref($ptr)
         if (ref($ptr) eq 'HASH') {
            recurse_json($ptr, sub {
               push(@statusmsg, format_output(@_));
